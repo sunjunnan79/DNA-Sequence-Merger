@@ -1,16 +1,60 @@
+# =========================
 # Dependencies
+# =========================
 node_modules/
 DNA/.venv/
+
+# Python virtual envs
+.venv/
+venv/
+env/
+ENV/
+virtualenv/
+
+# =========================
+# Python cache / bytecode
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# pytest cache
+.pytest_cache/
+
+# mypy cache
+.mypy_cache/
+
+# pyright
+.pyright/
+
+# =========================
 # Build outputs
+# =========================
 dist/
 dist-electron/
 out/
 release/
+build/
 
+# Python build
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# =========================
 # Test coverage
+# =========================
 coverage/
+.coverage
+.coverage.*
 
+# =========================
 # IDE
+# =========================
 .vscode/
 .idea/
 .claude/
@@ -18,33 +62,45 @@ coverage/
 *.swo
 *~
 
+# =========================
 # OS
+# =========================
 .DS_Store
 Thumbs.db
 
+# =========================
 # Logs
+# =========================
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# =========================
 # Environment
+# =========================
 .env
 .env.local
 .env.*.local
 
+# =========================
 # Database
+# =========================
 *.db
 *.sqlite
 *.sqlite3
 
+# =========================
 # Temporary files
+# =========================
 tmp/
 temp/
 *.tmp
 
+# =========================
 # Package manager
+# =========================
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
