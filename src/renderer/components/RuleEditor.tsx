@@ -80,6 +80,7 @@ export function RuleEditor({ rule, onSave, onCancel }: RuleEditorProps) {
       endSequence: '',
       includeStart: false,
       includeEnd: false,
+      reverseComplement: false,
     };
 
     setFragments([...fragments, newFragment]);
@@ -258,6 +259,14 @@ export function RuleEditor({ rule, onSave, onCancel }: RuleEditorProps) {
                         required
                         placeholder="例如：pETUpstream"
                       />
+                      <label className="checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(fragment.reverseComplement)}
+                          onChange={(e) => handleFragmentChange(index, 'reverseComplement', e.target.checked)}
+                        />
+                        先按起止序列截取，再反向互补
+                      </label>
                     </div>
 
                     <div className="form-group">

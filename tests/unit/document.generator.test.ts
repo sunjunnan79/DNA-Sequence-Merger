@@ -1,5 +1,6 @@
 // 文档生成器测试
 import * as fc from 'fast-check';
+import AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DocumentGenerator } from '../../src/main/services/document.generator';
@@ -84,6 +85,87 @@ describe('DocumentGenerator', () => {
       const generatedPath = await generator.generateDocument(options);
 
       expect(fs.existsSync(generatedPath)).toBe(true);
+    });
+
+    it('should fail before generation when output path is not writable', async () => {
+      const result: ProcessResult = {
+        groupName: 'test-group',
+        dnaSequence: 'ATG',
+        proteinSequence: 'M',
+        warnings: [],
+      };
+
+      const options: DocumentOptions = {
+        // 使用已存在的目录模拟不可作为 docx 文件写入的目标路径，覆盖生成前的可写性检查。
+        outputPath: tempDir,
+        results: [result],
+        blastResults: new Map(),
+        subjectSequence: 'M',
+      };
+
+      await expect(generator.generateDocument(options)).rejects.toThrow('输出文件当前无法写入');
+    });
+
+    it('should include per-fragment protein translations in document', async () => {
+      const result: ProcessResult = {
+        groupName: 'test-group',
+        dnaSequence: 'ATGAAACCCTTTGCA',
+        proteinSequence: 'MKPFA',
+        fragmentTranslations: [
+          {
+            order: 1,
+            filePattern: 'pattern1',
+            filename: 'pattern1(group1).seq',
+            dnaLength: 9,
+            proteinSequence: 'MKP',
+            selectedFrame: 0,
+            readingFrames: [
+              { frame: 0, proteinSequence: 'MKP', proteinLength: 3 },
+              { frame: 1, proteinSequence: '', proteinLength: 0 },
+              { frame: 2, proteinSequence: 'ET', proteinLength: 2 },
+            ],
+            reverseComplement: false,
+          },
+          {
+            order: 2,
+            filePattern: 'pattern2',
+            filename: 'pattern2(group1).seq',
+            dnaLength: 6,
+            proteinSequence: 'FA',
+            selectedFrame: 0,
+            readingFrames: [
+              { frame: 0, proteinSequence: 'FA', proteinLength: 2 },
+              { frame: 1, proteinSequence: 'L', proteinLength: 1 },
+              { frame: 2, proteinSequence: 'C', proteinLength: 1 },
+            ],
+            reverseComplement: true,
+          },
+        ],
+        warnings: [],
+      };
+
+      const outputPath = path.join(tempDir, 'test-fragment-translations.docx');
+      const options: DocumentOptions = {
+        outputPath,
+        results: [result],
+        blastResults: new Map(),
+        subjectSequence: 'MKPFA',
+      };
+
+      await generator.generateDocument(options);
+
+      // docx 本质是 zip 包，读取 document.xml 可以直接验证片段翻译表已写入文档主体。
+      const zip = new AdmZip(outputPath);
+      const documentXml = zip.readAsText('word/document.xml');
+      expect(documentXml).toContain('各片段氨基酸翻译结果');
+      expect(documentXml).toContain('pattern1(group1).seq');
+      expect(documentXml).toContain('pattern2(group1).seq');
+      expect(documentXml).toContain('三帧评分');
+      expect(documentXml).toContain('+0:len3 / +1:len0 / +2:len2');
+      expect(documentXml).toContain('MKP');
+      expect(documentXml).toContain('FA');
+      expect(documentXml).not.toContain('氨基酸直接对比结果');
+      expect(documentXml).not.toContain('Method = local amino acid direct comparison');
     });
   });
 

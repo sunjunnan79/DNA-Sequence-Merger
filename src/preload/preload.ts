@@ -23,6 +23,7 @@ const electronAPI: ElectronAPI = {
   
   // 处理
   processSequences: (options: ProcessOptions) => ipcRenderer.invoke('process-sequences', options),
+  validateOutputPath: (outputPath: string) => ipcRenderer.invoke('validate-output-path', outputPath),
   generateDocument: (options: DocumentOptions) => ipcRenderer.invoke('generate-document', options),
   onProcessProgress: (callback: (progress: ProcessProgress) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: ProcessProgress) => callback(progress);

@@ -5,6 +5,7 @@ import { Logger } from './utils/logger';
 import { DatabaseService } from './services/database.service';
 import { FileService } from './services/file.service';
 import { SequenceProcessor } from './services/sequence.processor';
+import { ExpasyTranslationService } from './services/translation.service';
 import { BlastService } from './services/blast.service';
 import { DocumentGenerator } from './services/document.generator';
 import { AutoUpdaterService } from './services/auto-updater.service';
@@ -39,7 +40,10 @@ interface WindowConfig {
 
 function resolvePreloadPath(): string {
   const candidates = [
+    join(process.cwd(), 'src', 'preload', 'preload.cjs'),
+    join(app.getAppPath(), 'src', 'preload', 'preload.cjs'),
     join(app.getAppPath(), 'dist-electron', 'preload.js'),
+    join(process.resourcesPath, 'app.asar', 'src', 'preload', 'preload.cjs'),
     join(process.resourcesPath, 'app.asar', 'dist-electron', 'preload.js'),
     join(process.resourcesPath, 'dist-electron', 'preload.js'),
     join(process.cwd(), 'dist-electron', 'preload.js'),
@@ -111,7 +115,7 @@ async function initializeServices(): Promise<void> {
     Logger.info('File service initialized');
 
     // 初始化序列处理器
-    sequenceProcessor = new SequenceProcessor(fileService);
+    sequenceProcessor = new SequenceProcessor(fileService, new ExpasyTranslationService());
     Logger.info('Sequence processor initialized');
 
     // 初始化BLAST服务

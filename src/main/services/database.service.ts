@@ -61,9 +61,36 @@ export class DatabaseService {
           end_sequence TEXT,
           include_start BOOLEAN DEFAULT 0,
           include_end BOOLEAN DEFAULT 0,
+          reverse_complement BOOLEAN DEFAULT 0,
           FOREIGN KEY (rule_id) REFERENCES merge_rules(id) ON DELETE CASCADE
         )
       `);
+
+      // 迁移：旧版本的片段规则没有 reverse_complement 列，需要补齐并默认关闭。
+      // 更早的实验版本曾使用 use_reverse_complement 保存同一语义；
+      // 因此这里不仅要加新列，还要把旧列中已经勾选的规则同步回来，避免用户原规则看起来“丢失”。
+      try {
+        const fragmentColumns = this.db.pragma('table_info(fragment_rules)') as Array<{ name: string }>;
+        const hasReverseComplement = fragmentColumns.some((col) => col.name === 'reverse_complement');
+        const hasLegacyReverseComplement = fragmentColumns.some((col) => col.name === 'use_reverse_complement');
+
+        if (!hasReverseComplement) {
+          console.log('Migrating database: adding reverse_complement column');
+          this.db.exec('ALTER TABLE fragment_rules ADD COLUMN reverse_complement BOOLEAN DEFAULT 0');
+        }
+
+        if (hasLegacyReverseComplement) {
+          this.db.exec(`
+            UPDATE fragment_rules
+            SET reverse_complement = CASE
+              WHEN COALESCE(use_reverse_complement, 0) = 1 THEN 1
+              ELSE COALESCE(reverse_complement, 0)
+            END
+          `);
+        }
+      } catch (error) {
+        console.warn('Fragment rule migration check failed:', error);
+      }
 
       // 创建app_config表
       this.db.exec(`
@@ -185,9 +212,9 @@ export class DatabaseService {
       const insertFragment = this.db.prepare(`
         INSERT INTO fragment_rules (
           rule_id, order_index, file_pattern, 
-          start_sequence, end_sequence, include_start, include_end
+          start_sequence, end_sequence, include_start, include_end, reverse_complement
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       // 使用事务确保数据一致性
@@ -208,7 +235,8 @@ export class DatabaseService {
             fragment.startSequence || null,
             fragment.endSequence || null,
             fragment.includeStart ? 1 : 0,
-            fragment.includeEnd ? 1 : 0
+            fragment.includeEnd ? 1 : 0,
+            fragment.reverseComplement ? 1 : 0
           );
         }
 
@@ -247,9 +275,9 @@ export class DatabaseService {
       const insertFragment = this.db.prepare(`
         INSERT INTO fragment_rules (
           rule_id, order_index, file_pattern, 
-          start_sequence, end_sequence, include_start, include_end
+          start_sequence, end_sequence, include_start, include_end, reverse_complement
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       // 使用事务
@@ -273,7 +301,8 @@ export class DatabaseService {
               fragment.startSequence || null,
               fragment.endSequence || null,
               fragment.includeStart ? 1 : 0,
-              fragment.includeEnd ? 1 : 0
+              fragment.includeEnd ? 1 : 0,
+              fragment.reverseComplement ? 1 : 0
             );
           }
         }
@@ -317,7 +346,7 @@ export class DatabaseService {
 
       const fragmentsStmt = this.db.prepare(`
         SELECT order_index, file_pattern, start_sequence, end_sequence,
-               include_start, include_end
+               include_start, include_end, reverse_complement
         FROM fragment_rules
         WHERE rule_id = ?
         ORDER BY order_index
@@ -338,6 +367,7 @@ export class DatabaseService {
         endSequence: row.end_sequence || undefined,
         includeStart: Boolean(row.include_start),
         includeEnd: Boolean(row.include_end),
+        reverseComplement: Boolean(row.reverse_complement),
       }));
 
       return {

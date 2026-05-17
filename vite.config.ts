@@ -2,10 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import electron from 'vite-plugin-electron';
 import { resolve } from 'path';
+import { browserRuleApiPlugin } from './src/dev/browser-api';
 
 export default defineConfig({
   plugins: [
     react(),
+    browserRuleApiPlugin(),
     electron([
       {
         entry: 'src/main/main.ts',
@@ -26,13 +28,12 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
-            lib: {
-              entry: 'src/preload/preload.ts',
-              formats: ['cjs'],
-              fileName: () => 'preload.js'
-            },
             rollupOptions: {
-              external: ['electron']
+              external: ['electron'],
+              output: {
+                format: 'cjs',
+                entryFileNames: 'preload.js',
+              },
             }
           }
         }

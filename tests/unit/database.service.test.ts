@@ -277,6 +277,7 @@ describe('DatabaseService', () => {
               expect(loadedFrag.endSequence).toBe(savedFrag.endSequence);
               expect(loadedFrag.includeStart).toBe(savedFrag.includeStart);
               expect(loadedFrag.includeEnd).toBe(savedFrag.includeEnd);
+              expect(loadedFrag.reverseComplement).toBe(Boolean(savedFrag.reverseComplement));
             }
             
             // 清理：删除创建的规则以避免UNIQUE约束冲突

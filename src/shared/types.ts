@@ -8,6 +8,7 @@ export interface FragmentRule {
   endSequence?: string;    // 例如: "ATGTTC"
   includeStart: boolean;
   includeEnd: boolean;
+  reverseComplement?: boolean;
 }
 
 export interface MergeRule {
@@ -42,10 +43,37 @@ export interface ProcessOptions {
   files: SequenceFile[];
 }
 
+export interface ReadingFrameTranslation {
+  frame: number;
+  proteinSequence: string;
+  proteinLength: number;
+  alignmentScore?: number;
+  identityPercent?: number;
+}
+
+export interface FragmentTranslationResult {
+  order: number;
+  filePattern: string;
+  filename: string;
+  dnaLength: number;
+  proteinSequence: string;
+  selectedFrame: number;
+  selectionMethod?: 'reference-alignment' | 'longest-open-reading-frame';
+  alignmentScore?: number;
+  identityPercent?: number;
+  readingFrames: ReadingFrameTranslation[];
+  reverseComplement: boolean;
+}
+
 export interface ProcessResult {
   groupName: string;
   dnaSequence: string;
   proteinSequence: string;
+  proteinReadingFrame?: number;
+  proteinSelectionMethod?: 'reference-alignment' | 'longest-open-reading-frame';
+  proteinAlignmentScore?: number;
+  proteinIdentityPercent?: number;
+  fragmentTranslations?: FragmentTranslationResult[];
   warnings: string[];
 }
 
@@ -134,6 +162,7 @@ export interface ElectronAPI {
   
   // 处理
   processSequences(options: ProcessOptions): Promise<ProcessResult[]>;
+  validateOutputPath(outputPath: string): Promise<void>;
   generateDocument(options: DocumentOptions): Promise<string>;
   onProcessProgress(callback: (progress: ProcessProgress) => void): () => void;
 

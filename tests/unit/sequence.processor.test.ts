@@ -1,6 +1,7 @@
 import * as fc from 'fast-check';
 import { SequenceProcessor } from '../../src/main/services/sequence.processor';
 import { FileService } from '../../src/main/services/file.service';
+import { ExpasyTranslationService } from '../../src/main/services/translation.service';
 import { dnaCodonSequenceArbitrary } from '../utils/arbitraries';
 
 describe('SequenceProcessor', () => {
@@ -89,6 +90,57 @@ describe('SequenceProcessor', () => {
       expect(processor.translateToProtein('atg')).toBe('M');
       expect(processor.translateToProtein('AtG')).toBe('M');
       expect(processor.translateToProtein('aTg')).toBe('M');
+    });
+
+    it('should choose reading frame by local alignment to reference protein when available', async () => {
+      // 第 0 阅读框会得到 NGIL，但第 +1 阅读框能翻译出和参考蛋白完全一致的 MAF。
+      // 这里验证阅读框选择交给 Smith-Waterman 局部比对，而不是只看终止前长度。
+      const result = await processor.translateBestReadingFrame('AATGGCATTTTAA', 'MAF');
+
+      expect(result.selectedFrame).toBe(1);
+      expect(result.proteinSequence).toBe('MAF');
+      expect(result.selectionMethod).toBe('reference-alignment');
+      expect(result.alignmentScore).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Expasy Translate parsing', () => {
+    it('should parse six-frame FASTA returned by Expasy Translate', () => {
+      const service = new ExpasyTranslationService();
+      const frames = service.parseFastaFrames(
+        [
+          "> VIRT-2119284:3'5' Frame 1",
+          'LKCH',
+          "> VIRT-2119284:3'5' Frame 2",
+          '-NAI',
+          "> VIRT-2119284:3'5' Frame 3",
+          'KMP',
+          "> VIRT-2119284:5'3' Frame 1",
+          'NGIL',
+          "> VIRT-2119284:5'3' Frame 2",
+          'MAF-',
+          "> VIRT-2119284:5'3' Frame 3",
+          'WHF',
+        ].join('\n'),
+      );
+
+      expect(frames).toEqual([
+        { strand: 'reverse', frame: 0, proteinSequence: 'LKCH' },
+        { strand: 'reverse', frame: 1, proteinSequence: '-NAI' },
+        { strand: 'reverse', frame: 2, proteinSequence: 'KMP' },
+        { strand: 'forward', frame: 0, proteinSequence: 'NGIL' },
+        { strand: 'forward', frame: 1, proteinSequence: 'MAF-' },
+        { strand: 'forward', frame: 2, proteinSequence: 'WHF' },
+      ]);
+    });
+  });
+
+  describe('reverseComplement', () => {
+    it('should create reverse complement DNA sequences', () => {
+      // 反向互补需要先反转序列方向，再逐位替换为互补碱基。
+      expect(processor.reverseComplement('ATGC')).toBe('GCAT');
+      expect(processor.reverseComplement('atgcnn')).toBe('NNGCAT');
+      expect(processor.reverseComplement('ARYN')).toBe('NRYT');
     });
   });
 
@@ -299,6 +351,36 @@ describe('SequenceProcessor', () => {
         // 验证结果
         expect(result.groupName).toBe('(group1)');
         expect(result.warnings).toHaveLength(0);
+        expect(result.fragmentTranslations).toEqual([
+          expect.objectContaining({
+            order: 1,
+            filePattern: 'pattern1',
+            filename: 'pattern1(group1).seq',
+            dnaLength: 12,
+            proteinSequence: 'MKPG',
+            selectedFrame: 0,
+            reverseComplement: false,
+          }),
+          expect.objectContaining({
+            order: 2,
+            filePattern: 'pattern2',
+            filename: 'pattern2(group1).seq',
+            dnaLength: 6,
+            proteinSequence: 'FA',
+            selectedFrame: 0,
+            reverseComplement: false,
+          }),
+          expect.objectContaining({
+            order: 3,
+            filePattern: 'pattern3',
+            filename: 'pattern3(group1).seq',
+            dnaLength: 9,
+            proteinSequence: 'PKF',
+            selectedFrame: 0,
+            reverseComplement: false,
+          }),
+        ]);
+        expect(result.fragmentTranslations?.[0].readingFrames.map((frame) => frame.proteinLength)).toEqual([4, 0, 3]);
         
         // 验证DNA序列按顺序拼接
         // pattern1: ATGAAACCCGGG -> 从ATG开始 -> ATGAAACCCGGG
@@ -434,6 +516,68 @@ describe('SequenceProcessor', () => {
 
         // 应该按照order排序：A(1) -> B(2) -> C(3)
         expect(result.dnaSequence).toBe('AAABBBCCC');
+      } finally {
+        try {
+          await fs.promises.rm(tmpDir, { recursive: true, force: true });
+        } catch (e) {
+          // 忽略清理错误
+        }
+      }
+    });
+
+    it('should apply reverse complement after extracting each matched fragment when enabled', async () => {
+      const fs = require('fs');
+      const path = require('path');
+      const tmpDir = path.join(process.cwd(), 'temp', `test_${Date.now()}`);
+
+      try {
+        await fs.promises.mkdir(tmpDir, { recursive: true });
+
+        const file1Path = path.join(tmpDir, 'A(group1).seq');
+        const file2Path = path.join(tmpDir, 'B(group1).seq');
+
+        // 先在原始序列中按 AAA/TTT 截出 GGGATG，再对截出的片段做反向互补得到 CATCCC。
+        await fs.promises.writeFile(file1Path, 'CCCAAAGGGATGTTTCCC');
+        // 第二个片段同理：原始截出 ATGAAA，反向互补后得到 TTTCAT。
+        await fs.promises.writeFile(file2Path, 'GGGCCCATGAAATTTGGG');
+
+        const rule: Omit<import('../../src/shared/types').MergeRule, 'id' | 'createdAt' | 'updatedAt'> = {
+          name: 'Reverse Complement Rule',
+          fragments: [
+            {
+              order: 1,
+              filePattern: 'A',
+              startSequence: 'AAA',
+              endSequence: 'TTT',
+              includeStart: false,
+              includeEnd: false,
+              reverseComplement: true,
+            },
+            {
+              order: 2,
+              filePattern: 'B',
+              startSequence: 'ATG',
+              endSequence: 'TTT',
+              includeStart: true,
+              includeEnd: false,
+              reverseComplement: true,
+            },
+          ],
+        };
+
+        const files: import('../../src/shared/types').SequenceFile[] = [
+          { path: file1Path, filename: 'A(group1).seq', group: '(group1)', pattern: 'A', size: 12 },
+          { path: file2Path, filename: 'B(group1).seq', group: '(group1)', pattern: 'B', size: 9 },
+        ];
+
+        const result = await processor.mergeSequences({
+          rule: rule as import('../../src/shared/types').MergeRule,
+          files,
+        });
+
+        // 反向互补应分别发生在 A、B 两个片段截取后，最后按规则顺序拼接转换后的片段。
+        expect(result.dnaSequence).toBe('CATCCCTTTCAT');
+        expect(result.proteinSequence).toBe('HPFH');
       } finally {
         try {
           await fs.promises.rm(tmpDir, { recursive: true, force: true });

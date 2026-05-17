@@ -135,6 +135,20 @@ export function ProcessPanel() {
     lastProgressLogRef.current = '';
     dispatch({ type: 'START_PROCESSING' });
     dispatch({
+      type: 'SET_PROCESS_PROGRESS',
+      payload: {
+        stage: 'preparing',
+        progress: 2,
+        message: '正在检查输出文档是否可写...',
+        current: 0,
+        total: state.files.length,
+        successCount: 0,
+        failureCount: 0,
+        warningCount: 0,
+        logLevel: 'info',
+      },
+    });
+    dispatch({
       type: 'ADD_LOG',
       payload: {
         timestamp: new Date(),
@@ -144,6 +158,22 @@ export function ProcessPanel() {
     });
 
     try {
+      await window.electronAPI.validateOutputPath(state.outputPath);
+      dispatch({
+        type: 'SET_PROCESS_PROGRESS',
+        payload: {
+          stage: 'preparing',
+          progress: 5,
+          message: '输出文档可写，开始解析序列...',
+          current: 0,
+          total: state.files.length,
+          successCount: 0,
+          failureCount: 0,
+          warningCount: 0,
+          logLevel: 'info',
+        },
+      });
+
       const allFiles = state.files.flatMap((group) => group.files);
       const processOptions: ProcessOptions = {
         rule: state.selectedRule,

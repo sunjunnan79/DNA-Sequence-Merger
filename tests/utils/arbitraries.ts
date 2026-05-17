@@ -44,6 +44,7 @@ export const fragmentRuleArbitrary = (): fc.Arbitrary<FragmentRule> => {
     endSequence: fc.option(dnaSequenceArbitrary(3, 20), { nil: undefined }),
     includeStart: fc.boolean(),
     includeEnd: fc.boolean(),
+    reverseComplement: fc.boolean(),
   });
 };
 

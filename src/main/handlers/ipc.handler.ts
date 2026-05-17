@@ -69,6 +69,7 @@ export class IPCHandler {
     ipcMain.handle('save-config', this.handleSaveConfig.bind(this));
 
     ipcMain.handle('process-sequences', this.handleProcessSequences.bind(this));
+    ipcMain.handle('validate-output-path', this.handleValidateOutputPath.bind(this));
     ipcMain.handle('generate-document', this.handleGenerateDocument.bind(this));
 
     ipcMain.handle('cleanup-temp', this.handleCleanupTemp.bind(this));
@@ -371,6 +372,23 @@ export class IPCHandler {
   }
 
   /**
+   * 在正式解析序列前检查输出路径是否可写。
+   *
+   * 这个 IPC 专门给“开始处理”按钮使用：用户点击后立即检查目标 docx 是否被 Word/WPS 占用，
+   * 检查通过才进入耗时的解析、翻译和 BLAST 阶段。
+   */
+  private async handleValidateOutputPath(
+    _event: Electron.IpcMainInvokeEvent,
+    outputPath: string,
+  ): Promise<void> {
+    try {
+      this.documentGenerator.validateOutputPath(outputPath);
+    } catch (error) {
+      throw new Error(`Failed to validate output path: ${(error as Error).message}`);
+    }
+  }
+
+  /**
    * 生成目标 Word 文档。
    *
    * 这里额外做了一层 BLAST 结果转换，是因为渲染进程通过 IPC 传值时，
@@ -386,6 +404,8 @@ export class IPCHandler {
     });
 
     try {
+      this.documentGenerator.validateOutputPath(options.outputPath);
+
       sendProgress({
         stage: 'blast-comparing',
         progress: options.subjectSequence?.trim() ? 76 : 88,

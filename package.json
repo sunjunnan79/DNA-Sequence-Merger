@@ -55,6 +55,7 @@
     "wait-on": "^7.2.0"
   },
   "dependencies": {
+    "@bioscript/seq-align": "^0.1.0",
     "adm-zip": "^0.5.10",
     "better-sqlite3": "^9.2.2",
     "docx": "^8.5.0",
